@@ -3,10 +3,15 @@ import express from "express";
 const app = express();
 const PORT = 3000;
 
-app.get("/", (req, res) => {
-  res.send("Serious Game Backend is running!");
+app.use(express.json());
+
+app.get("/api/health", (req, res) => {
+  res.json({
+    status: "ok",
+    message: "Serious Game Backend is connected!",
+  });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
