@@ -1,54 +1,35 @@
-import { useEffect, useState } from "react";
+import { router } from "expo-router";
 import {
-  ActivityIndicator,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from "react-native";
 
-const API_URL = "http://192.168.0.26:3000";
-
-export default function HomeScreen() {
-  const [message, setMessage] = useState("Connecting...");
-  const [connected, setConnected] = useState(false);
-
-  useEffect(() => {
-    const checkBackend = async () => {
-      try {
-        const response = await fetch(`${API_URL}/api/health`);
-
-        if (!response.ok) {
-          throw new Error("Backend returned an error");
-        }
-
-        const data = await response.json();
-
-        setMessage(data.message);
-        setConnected(true);
-      } catch (error) {
-        console.error(error);
-        setMessage("Could not connect to backend");
-        setConnected(false);
-      }
-    };
-
-    checkBackend();
-  }, []);
-
+export default function IndexScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Serious Game</Text>
 
-      <ActivityIndicator
-        size="large"
-        animating={message === "Connecting..."}
-      />
-
-      <Text style={styles.status}>
-        {connected ? "✅ Connected" : "❌ Not connected"}
+      <Text style={styles.subtitle}>
+        Competitive 1v1 Learning Game
       </Text>
 
-      <Text style={styles.message}>{message}</Text>
+      <TouchableOpacity
+        style={styles.primaryButton}
+        onPress={() => router.push("/login")}
+      >
+        <Text style={styles.primaryButtonText}>Login</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.secondaryButton}
+        onPress={() => router.push("/register")}
+      >
+        <Text style={styles.secondaryButtonText}>
+          Create Account
+        </Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -56,30 +37,51 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    alignItems: "center",
     justifyContent: "center",
     padding: 24,
     backgroundColor: "#ffffff",
   },
 
   title: {
-    fontSize: 30,
+    fontSize: 36,
     fontWeight: "bold",
-    marginBottom: 30,
-    color: "#111827",
-  },
-
-  status: {
-    fontSize: 20,
-    fontWeight: "bold",
-    marginTop: 20,
-    color: "#111827",
-  },
-
-  message: {
-    fontSize: 16,
-    marginTop: 10,
     textAlign: "center",
+    marginBottom: 8,
     color: "#111827",
+  },
+
+  subtitle: {
+    fontSize: 16,
+    textAlign: "center",
+    marginBottom: 40,
+    color: "#6B7280",
+  },
+
+  primaryButton: {
+    backgroundColor: "#6D4AFF",
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 14,
+  },
+
+  primaryButtonText: {
+    color: "#ffffff",
+    textAlign: "center",
+    fontSize: 18,
+    fontWeight: "bold",
+  },
+
+  secondaryButton: {
+    borderWidth: 2,
+    borderColor: "#6D4AFF",
+    padding: 14,
+    borderRadius: 12,
+  },
+
+  secondaryButtonText: {
+    color: "#6D4AFF",
+    textAlign: "center",
+    fontSize: 18,
+    fontWeight: "bold",
   },
 });
