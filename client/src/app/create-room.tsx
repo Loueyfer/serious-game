@@ -94,7 +94,16 @@ export default function CreateRoomScreen() {
           return;
         }
 
-        setRoomCode(response.room.code);
+        const code = response.room.code;
+
+        setRoomCode(code);
+
+        router.replace({
+          pathname: "/lobby",
+          params: {
+            roomCode: code,
+          },
+        });
       }
     );
   }

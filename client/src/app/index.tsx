@@ -5,9 +5,13 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-
+import { LinearGradient } from "expo-linear-gradient";
 export default function IndexScreen() {
   return (
+    <LinearGradient
+    colors={["#D3C4FF", "#ECE6FF", "#FFFFFF"]}
+    style={styles.background}
+  >
     <View style={styles.container}>
       <Text style={styles.title}>Battle of Minds</Text>
 
@@ -31,6 +35,7 @@ export default function IndexScreen() {
         </Text>
       </TouchableOpacity>
     </View>
+    </LinearGradient>
   );
 }
 
@@ -39,9 +44,11 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     padding: 24,
-    backgroundColor: "#ffffff",
+    backgroundColor: "transparent",
   },
-
+  background: {
+  flex: 1,
+},
   title: {
     fontSize: 36,
     fontWeight: "bold",

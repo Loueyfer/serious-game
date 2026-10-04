@@ -71,15 +71,12 @@ export default function JoinRoomScreen() {
           return;
         }
 
-        setJoinedRoomCode(
-          response.room.code
-        );
-
-        setPlayers(
-          response.room.players.map(
-            (player) => player.username
-          )
-        );
+        router.replace({
+        pathname: "/lobby",
+        params: {
+          roomCode: response.room.code,
+        },
+});
       }
     );
   }

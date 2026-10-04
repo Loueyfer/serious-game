@@ -5,9 +5,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-
+import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "../context/AuthContext";
-
 
 export default function HomeScreen() {
   const { user, logout } = useAuth();
@@ -18,6 +17,10 @@ export default function HomeScreen() {
   }
 
   return (
+    <LinearGradient
+    colors={["#D3C4FF", "#ECE6FF", "#FFFFFF"]}
+    style={styles.background}
+  >
     <View style={styles.container}>
       <Text style={styles.title}>Let's Compete!</Text>
 
@@ -72,6 +75,7 @@ export default function HomeScreen() {
         <Text style={styles.logoutText}>Logout</Text>
       </TouchableOpacity>
     </View>
+    </LinearGradient>
   );
 }
 
@@ -80,9 +84,11 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     padding: 24,
-    backgroundColor: "#ffffff",
+    backgroundColor: "transparent",
   },
-
+  background: {
+  flex: 1,
+},
   title: {
     fontSize: 34,
     fontWeight: "bold",

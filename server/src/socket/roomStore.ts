@@ -2,6 +2,7 @@ export type RoomPlayer = {
   userId: string;
   username: string;
   socketId: string;
+  ready: boolean;
 };
 
 export type GameRoom = {
@@ -9,6 +10,8 @@ export type GameRoom = {
   ownerId: string;
   players: RoomPlayer[];
   createdAt: string;
+  status: "lobby" | "countdown" | "live";
+  countdownId: string | null;
 };
 
 export const rooms = new Map<string, GameRoom>();
