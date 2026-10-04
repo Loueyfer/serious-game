@@ -1,6 +1,7 @@
 import { router } from "expo-router";
 import { useState } from "react";
 import {
+  ActivityIndicator,
   StyleSheet,
   Text,
   TextInput,
@@ -8,49 +9,162 @@ import {
   View,
 } from "react-native";
 
+import { socket } from "../services/socket";
+
+type JoinRoomResponse =
+  | {
+      success: true;
+      room: {
+        code: string;
+        players: {
+          userId: string;
+          username: string;
+          socketId: string;
+        }[];
+      };
+    }
+  | {
+      success: false;
+      message: string;
+    };
+
 export default function JoinRoomScreen() {
   const [roomCode, setRoomCode] = useState("");
+  const [joinedRoomCode, setJoinedRoomCode] =
+    useState<string | null>(null);
 
-  const handleJoinRoom = () => {
-    const cleanCode = roomCode.trim().toUpperCase();
+  const [players, setPlayers] = useState<
+    string[]
+  >([]);
+
+  const [joining, setJoining] = useState(false);
+  const [error, setError] = useState("");
+
+  function handleJoinRoom() {
+    setError("");
+
+    const cleanCode =
+      roomCode.trim().toUpperCase();
 
     if (!cleanCode) {
+      setError("Please enter a room code.");
       return;
     }
 
-    // Socket.IO room joining will be implemented in Phase 5
-    console.log("Room code:", cleanCode);
-  };
+    if (!socket.connected) {
+      setError(
+        "Not connected to the game server."
+      );
+      return;
+    }
+
+    setJoining(true);
+
+    socket.emit(
+      "join_room",
+      cleanCode,
+      (response: JoinRoomResponse) => {
+        setJoining(false);
+
+        if (!response.success) {
+          setError(response.message);
+          return;
+        }
+
+        setJoinedRoomCode(
+          response.room.code
+        );
+
+        setPlayers(
+          response.room.players.map(
+            (player) => player.username
+          )
+        );
+      }
+    );
+  }
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Join Room</Text>
-
-      <Text style={styles.description}>
-        Enter the room code shared by your opponent.
+      <Text style={styles.title}>
+        Join Room
       </Text>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Room Code"
-        placeholderTextColor="#9CA3AF"
-        value={roomCode}
-        onChangeText={setRoomCode}
-        autoCapitalize="characters"
-        maxLength={10}
-      />
+      {!joinedRoomCode ? (
+        <>
+          <Text style={styles.description}>
+            Enter the room code shared by your
+            opponent.
+          </Text>
+
+          <TextInput
+            style={styles.input}
+            placeholder="Room Code"
+            placeholderTextColor="#9CA3AF"
+            value={roomCode}
+            onChangeText={setRoomCode}
+            autoCapitalize="characters"
+            autoCorrect={false}
+            maxLength={6}
+          />
+
+          {error ? (
+            <Text style={styles.error}>
+              {error}
+            </Text>
+          ) : null}
+
+          <TouchableOpacity
+            style={[
+              styles.button,
+              joining &&
+                styles.buttonDisabled,
+            ]}
+            onPress={handleJoinRoom}
+            disabled={joining}
+          >
+            {joining ? (
+              <ActivityIndicator
+                color="#ffffff"
+              />
+            ) : (
+              <Text style={styles.buttonText}>
+                Join Room
+              </Text>
+            )}
+          </TouchableOpacity>
+        </>
+      ) : (
+        <View style={styles.card}>
+          <Text style={styles.successTitle}>
+            Room Joined!
+          </Text>
+
+          <Text style={styles.roomCode}>
+            {joinedRoomCode}
+          </Text>
+
+          <Text style={styles.playersTitle}>
+            Players
+          </Text>
+
+          {players.map((player) => (
+            <Text
+              key={player}
+              style={styles.player}
+            >
+              {player}
+            </Text>
+          ))}
+        </View>
+      )}
 
       <TouchableOpacity
-        style={styles.joinButton}
-        onPress={handleJoinRoom}
+        onPress={() => router.back()}
       >
-        <Text style={styles.joinButtonText}>
-          Join Room
+        <Text style={styles.backText}>
+          Back
         </Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity onPress={() => router.back()}>
-        <Text style={styles.backText}>Back</Text>
       </TouchableOpacity>
     </View>
   );
@@ -69,7 +183,7 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     textAlign: "center",
     color: "#111827",
-    marginBottom: 10,
+    marginBottom: 12,
   },
 
   description: {
@@ -84,25 +198,73 @@ const styles = StyleSheet.create({
     borderColor: "#D1D5DB",
     borderRadius: 12,
     padding: 16,
-    fontSize: 20,
+    fontSize: 22,
     textAlign: "center",
-    letterSpacing: 3,
+    letterSpacing: 5,
     color: "#111827",
-    marginBottom: 20,
+    marginBottom: 16,
   },
 
-  joinButton: {
+  error: {
+    color: "#DC2626",
+    textAlign: "center",
+    marginBottom: 16,
+  },
+
+  button: {
     backgroundColor: "#6D4AFF",
     padding: 16,
     borderRadius: 12,
     marginBottom: 20,
   },
 
-  joinButtonText: {
+  buttonDisabled: {
+    opacity: 0.6,
+  },
+
+  buttonText: {
     color: "#ffffff",
     textAlign: "center",
     fontSize: 18,
     fontWeight: "bold",
+  },
+
+  card: {
+    backgroundColor: "#F9FAFB",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 16,
+    padding: 24,
+    alignItems: "center",
+    marginBottom: 24,
+  },
+
+  successTitle: {
+    fontSize: 22,
+    fontWeight: "bold",
+    color: "#16A34A",
+    marginBottom: 12,
+  },
+
+  roomCode: {
+    fontSize: 32,
+    fontWeight: "bold",
+    letterSpacing: 5,
+    color: "#111827",
+    marginBottom: 24,
+  },
+
+  playersTitle: {
+    fontSize: 17,
+    fontWeight: "bold",
+    color: "#6D4AFF",
+    marginBottom: 10,
+  },
+
+  player: {
+    fontSize: 17,
+    color: "#374151",
+    marginBottom: 6,
   },
 
   backText: {

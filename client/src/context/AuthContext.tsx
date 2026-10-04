@@ -13,6 +13,7 @@ import {
   registerUser,
   User,
 } from "../services/api";
+import { socket } from "../services/socket";
 
 type AuthContextType = {
   user: User | null;
@@ -50,6 +51,52 @@ export function AuthProvider({
   useEffect(() => {
     restoreSession();
   }, []);
+  
+  useEffect(() => {
+  if (!token) {
+    if (socket.connected) {
+      socket.disconnect();
+    }
+
+    return;
+  }
+
+  socket.auth = {
+    token,
+  };
+
+  const handleConnect = () => {
+    console.log(
+      "Authenticated socket connected:",
+      socket.id
+    );
+  };
+
+  const handleDisconnect = () => {
+    console.log("Socket disconnected");
+  };
+
+  const handleConnectError = (error: Error) => {
+    console.log(
+      "Socket connection error:",
+      error.message
+    );
+  };
+
+  socket.on("connect", handleConnect);
+  socket.on("disconnect", handleDisconnect);
+  socket.on("connect_error", handleConnectError);
+
+  socket.connect();
+
+  return () => {
+    socket.off("connect", handleConnect);
+    socket.off("disconnect", handleDisconnect);
+    socket.off("connect_error", handleConnectError);
+
+    socket.disconnect();
+  };
+}, [token]);
 
   async function restoreSession() {
     try {

@@ -9,7 +9,7 @@ import {
 export default function IndexScreen() {
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Serious Game</Text>
+      <Text style={styles.title}>Battle of Minds</Text>
 
       <Text style={styles.subtitle}>
         Competitive 1v1 Learning Game

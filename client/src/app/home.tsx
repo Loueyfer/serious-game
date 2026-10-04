@@ -6,13 +6,27 @@ import {
   View,
 } from "react-native";
 
+import { useAuth } from "../context/AuthContext";
+
+
 export default function HomeScreen() {
+  const { user, logout } = useAuth();
+
+  async function handleLogout() {
+    await logout();
+    router.replace("/login");
+  }
+
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Serious Game</Text>
+      <Text style={styles.title}>Let's Compete!</Text>
 
       <Text style={styles.welcome}>
-        Welcome!
+        Welcome, {user?.username}!
+      </Text>
+
+      <Text style={styles.subtitle}>
+        Choose what you want to do
       </Text>
 
       <TouchableOpacity
@@ -50,6 +64,13 @@ export default function HomeScreen() {
           Instructions
         </Text>
       </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.logoutButton}
+        onPress={handleLogout}
+      >
+        <Text style={styles.logoutText}>Logout</Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -66,15 +87,23 @@ const styles = StyleSheet.create({
     fontSize: 34,
     fontWeight: "bold",
     textAlign: "center",
-    marginBottom: 8,
     color: "#111827",
+    marginBottom: 8,
   },
 
   welcome: {
-    fontSize: 18,
+    fontSize: 19,
+    fontWeight: "600",
     textAlign: "center",
-    marginBottom: 35,
+    color: "#6D4AFF",
+    marginBottom: 6,
+  },
+
+  subtitle: {
+    fontSize: 15,
+    textAlign: "center",
     color: "#6B7280",
+    marginBottom: 35,
   },
 
   mainButton: {
@@ -104,5 +133,17 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontSize: 17,
     fontWeight: "bold",
+  },
+
+  logoutButton: {
+    marginTop: 18,
+    padding: 12,
+  },
+
+  logoutText: {
+    color: "#DC2626",
+    textAlign: "center",
+    fontSize: 16,
+    fontWeight: "600",
   },
 });
