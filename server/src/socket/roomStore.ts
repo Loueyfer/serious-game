@@ -4,16 +4,40 @@ export type RoomPlayer = {
   socketId: string;
   ready: boolean;
 };
+export type MathAttempt = {
+  userId: string;
+  username: string;
+  answer: number | null;
+  correct: boolean;
+  submittedAt: number | null;
+  responseTimeMs: number | null;
+};
 
+export type MathQuestionState = {
+  id: string;
+  prompt: string;
+  choices: number[];
+
+  correctAnswer: number;
+
+  startedAt: number;
+  deadlineAt: number;
+
+  attempts: MathAttempt[];
+
+  resolved: boolean;
+};
 export type GameRoom = {
   code: string;
   ownerId: string;
   players: RoomPlayer[];
   createdAt: string;
+
   status: "lobby" | "countdown" | "live";
   countdownId: string | null;
-};
 
+  currentQuestion: MathQuestionState | null;
+};
 export const rooms = new Map<string, GameRoom>();
 
 const ROOM_CHARACTERS =

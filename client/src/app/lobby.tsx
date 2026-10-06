@@ -83,6 +83,15 @@ const handleGameStart = () => {
   setCountdown("GO!");
 
   console.log("Game start received");
+
+  setTimeout(() => {
+    router.replace({
+      pathname: "/math-question",
+      params: {
+        roomCode,
+      },
+    });
+  }, 400);
 };
     const handleRoomClosed = (data: {
       message: string;

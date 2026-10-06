@@ -26,8 +26,30 @@ type JoinRoomResponse =
       success: false;
       message: string;
     };
-    
-    
+type SubmitMathAnswerResponse =
+  | {
+      success: true;
+      responseTimeMs: number;
+    }
+  | {
+      success: false;
+      message: string;
+    };
+type MathPlayerResult = {
+  userId: string;
+  username: string;
+  answer: number | null;
+  correct: boolean;
+  responseTimeMs: number | null;
+  points: number;
+  timedOut: boolean;
+};
+
+type MathQuestionResult = {
+  questionId: string;
+  correctAnswer: number;
+  results: MathPlayerResult[];
+};  
 export function registerRoomHandlers(
   socket: Socket
 ) {
@@ -114,6 +136,99 @@ export function registerRoomHandlers(
       `${user.username} left room ${roomCode}`
     );
   }
+  function resolveMathQuestion(
+  roomCode: string
+) {
+  const room = rooms.get(roomCode);
+
+  if (
+    !room ||
+    !room.currentQuestion ||
+    room.currentQuestion.resolved
+  ) {
+    return;
+  }
+
+  const question = room.currentQuestion;
+
+  question.resolved = true;
+
+  const correctAttempts =
+    question.attempts
+      .filter((attempt) => attempt.correct)
+      .sort(
+        (a, b) =>
+          (a.responseTimeMs ?? Infinity) -
+          (b.responseTimeMs ?? Infinity)
+      );
+
+  const fastestCorrectUserId =
+  correctAttempts[0]?.userId ?? null;
+
+  const results: MathPlayerResult[] =
+    room.players.map((player) => {
+      const attempt =
+        question.attempts.find(
+          (attempt) =>
+            attempt.userId ===
+            player.userId
+        );
+
+      // Player did not answer
+      if (!attempt) {
+        return {
+          userId: player.userId,
+          username: player.username,
+          answer: null,
+          correct: false,
+          responseTimeMs: null,
+          points: 0,
+          timedOut: true,
+        };
+      }
+
+      let points = -2;
+
+      if (attempt.correct) {
+        points =
+          attempt.userId ===
+          fastestCorrectUserId
+            ? 10
+            : 5;
+      }
+
+      return {
+        userId: player.userId,
+        username: player.username,
+        answer: attempt.answer,
+        correct: attempt.correct,
+        responseTimeMs:
+          attempt.responseTimeMs,
+        points,
+        timedOut: false,
+      };
+    });
+
+  const result: MathQuestionResult = {
+    questionId: question.id,
+    correctAnswer:
+      question.correctAnswer,
+    results,
+  };
+
+  console.log(
+    `Math question resolved in room ${roomCode}`
+  );
+
+  console.log(result);
+
+  socket.nsp
+    .to(roomCode)
+    .emit(
+      "math_question_result",
+      result
+    );
+}
   socket.on(
     "create_room",
     (
@@ -163,6 +278,7 @@ export function registerRoomHandlers(
         createdAt: new Date().toISOString(),
         status: "lobby",
         countdownId: null,
+        currentQuestion: null,
       };
 
       rooms.set(roomCode, room);
@@ -311,6 +427,239 @@ socket.on(
       room,
     });
   }
+);
+socket.on(
+  "get_current_question",
+  (
+    roomCode: string,
+    callback: (response: any) => void
+  ) => {
+    const user = socket.data.user as {
+      userId: string;
+      username: string;
+    };
+
+    const cleanRoomCode =
+      roomCode.trim().toUpperCase();
+
+    const room = rooms.get(cleanRoomCode);
+
+    if (!room) {
+      callback({
+        success: false,
+        message: "Room not found",
+      });
+
+      return;
+    }
+
+    const playerInRoom =
+      room.players.some(
+        (player) =>
+          player.userId === user.userId
+      );
+
+    if (!playerInRoom) {
+      callback({
+        success: false,
+        message:
+          "You are not in this room",
+      });
+
+      return;
+    }
+
+    if (!room.currentQuestion) {
+      callback({
+        success: false,
+        message:
+          "No active question",
+      });
+
+      return;
+    }
+
+    const question =
+      room.currentQuestion;
+
+    callback({
+      success: true,
+
+      question: {
+        id: question.id,
+        prompt: question.prompt,
+        choices: question.choices,
+        startedAt: question.startedAt,
+        deadlineAt: question.deadlineAt,
+
+        // Lets the phone calculate the
+        // remaining time without controlling
+        // the authoritative timer.
+        serverNow: Date.now(),
+      },
+    });
+  }
+);
+socket.on(
+  "submit_math_answer",
+  (
+    roomCode: string,
+    questionId: string,
+    answer: number,
+    callback: (
+      response: SubmitMathAnswerResponse
+    ) => void
+  ) => {
+    const user = socket.data.user as {
+      userId: string;
+      username: string;
+    };
+    
+    const cleanRoomCode =
+      roomCode.trim().toUpperCase();
+
+    const room = rooms.get(cleanRoomCode);
+
+    if (!room) {
+      callback({
+        success: false,
+        message: "Room not found",
+      });
+
+      return;
+    }
+
+    const playerInRoom =
+      room.players.some(
+        (player) =>
+          player.userId === user.userId
+      );
+
+    if (!playerInRoom) {
+      callback({
+        success: false,
+        message:
+          "You are not in this room",
+      });
+
+      return;
+    }
+
+    if (
+      room.status !== "live" ||
+      !room.currentQuestion
+    ) {
+      callback({
+        success: false,
+        message:
+          "No active question",
+      });
+
+      return;
+    }
+
+    const question =
+      room.currentQuestion;
+
+    if (question.id !== questionId) {
+      callback({
+        success: false,
+        message:
+          "Question is no longer active",
+      });
+
+      return;
+    }
+
+    if (question.resolved) {
+      callback({
+        success: false,
+        message:
+          "Question is already finished",
+      });
+
+      return;
+    }
+
+    const existingAttempt =
+      question.attempts.find(
+        (attempt) =>
+          attempt.userId === user.userId
+      );
+
+    if (existingAttempt) {
+      callback({
+        success: false,
+        message:
+          "You already answered this question",
+      });
+
+      return;
+    }
+
+    if (
+      typeof answer !== "number" ||
+      !question.choices.includes(answer)
+    ) {
+      callback({
+        success: false,
+        message: "Invalid answer",
+      });
+
+      return;
+    }
+
+    const submittedAt = Date.now();
+
+    // Server controls the 5-second deadline.
+    if (
+      submittedAt >
+      question.deadlineAt
+    ) {
+      callback({
+        success: false,
+        message: "Time is up",
+      });
+
+      return;
+    }
+
+    const correct =
+      answer ===
+      question.correctAnswer;
+
+    const responseTimeMs =
+      submittedAt -
+      question.startedAt;
+
+    question.attempts.push({
+      userId: user.userId,
+      username: user.username,
+      answer,
+      correct,
+      submittedAt,
+      responseTimeMs,
+    });
+
+    console.log(
+      `${user.username} answered ${answer} - ${
+        correct ? "correct" : "wrong"
+      } - ${responseTimeMs}ms`
+    );
+
+    callback({
+      success: true,
+      responseTimeMs,
+    });
+    const everyoneAnswered =
+  question.attempts.length ===
+  room.players.length;
+
+if (everyoneAnswered) {
+  resolveMathQuestion(
+    cleanRoomCode
+  );
+}  }
 );
 
 socket.on(
@@ -493,9 +842,57 @@ if (
     currentRoom.status = "live";
     currentRoom.countdownId = null;
 
-    console.log(
-      `Game started in room ${cleanRoomCode}`
-    );
+    // Create the first Math question
+const startedAt = Date.now();
+
+currentRoom.currentQuestion = {
+  id: `math-${startedAt}`,
+
+  prompt: "7 × 8 = ?",
+
+  choices: [
+    54,
+    56,
+    64,
+  ],
+
+  correctAnswer: 56,
+
+  startedAt,
+
+  deadlineAt: startedAt + 5000,
+
+  attempts: [],
+
+  resolved: false,
+};
+const questionId =
+  currentRoom.currentQuestion.id;
+
+setTimeout(() => {
+  const latestRoom =
+    rooms.get(cleanRoomCode);
+
+  if (
+    !latestRoom ||
+    !latestRoom.currentQuestion ||
+    latestRoom.currentQuestion.id !==
+      questionId
+  ) {
+    return;
+  }
+
+  resolveMathQuestion(
+    cleanRoomCode
+  );
+}, 5000);
+console.log(
+  `Game started in room ${cleanRoomCode}`
+);
+
+console.log(
+  `Math question started: ${currentRoom.currentQuestion.prompt}`
+);
 
     socket.nsp
       .to(cleanRoomCode)
