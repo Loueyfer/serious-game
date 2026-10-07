@@ -3,6 +3,7 @@ export type RoomPlayer = {
   username: string;
   socketId: string;
   ready: boolean;
+  score: number;
 };
 export type MathAttempt = {
   userId: string;
@@ -37,6 +38,8 @@ export type GameRoom = {
   countdownId: string | null;
 
   currentQuestion: MathQuestionState | null;
+
+  mathQuestionIndex: number;
 };
 export const rooms = new Map<string, GameRoom>();
 

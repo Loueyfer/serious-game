@@ -1,7 +1,7 @@
 import type { Socket } from "socket.io";
 
 import type { GameRoom } from "./roomStore";
-
+import { mathTasks } from "../tasks/mathTasks";
 import {
   generateRoomCode,
   rooms,
@@ -229,6 +229,67 @@ export function registerRoomHandlers(
       result
     );
 }
+function startMathQuestion(
+  roomCode: string
+) {
+  const room = rooms.get(roomCode);
+
+  if (!room) {
+    return;
+  }
+
+  const task =
+    mathTasks[room.mathQuestionIndex];
+
+  if (!task) {
+    console.log(
+      `No Math question found at index ${room.mathQuestionIndex}`
+    );
+    return;
+  }
+
+  const startedAt = Date.now();
+
+  room.currentQuestion = {
+    id: task.id,
+    prompt: task.prompt,
+    choices: [...task.choices],
+    correctAnswer: task.correctAnswer,
+
+    startedAt,
+    deadlineAt: startedAt + 5000,
+
+    attempts: [],
+    resolved: false,
+  };
+
+  const questionId =
+    room.currentQuestion.id;
+
+  console.log(
+    `Math question ${
+      room.mathQuestionIndex + 1
+    }/${mathTasks.length} started in room ${roomCode}: ${task.prompt}`
+  );
+
+  // Resolve automatically when the
+  // 5-second deadline is reached.
+  setTimeout(() => {
+    const latestRoom =
+      rooms.get(roomCode);
+
+    if (
+      !latestRoom ||
+      !latestRoom.currentQuestion ||
+      latestRoom.currentQuestion.id !==
+        questionId
+    ) {
+      return;
+    }
+
+    resolveMathQuestion(roomCode);
+  }, 5000);
+}
   socket.on(
     "create_room",
     (
@@ -268,17 +329,19 @@ export function registerRoomHandlers(
 
         players: [
           {
-            userId: user.userId,
-            username: user.username,
-            socketId: socket.id,
-            ready: false,
-          },
+  userId: user.userId,
+  username: user.username,
+  socketId: socket.id,
+  ready: false,
+  score: 0,
+},
         ],
 
         createdAt: new Date().toISOString(),
         status: "lobby",
         countdownId: null,
         currentQuestion: null,
+        mathQuestionIndex: 0,
       };
 
       rooms.set(roomCode, room);
@@ -366,12 +429,12 @@ export function registerRoomHandlers(
     }
 
     const player = {
-      userId: user.userId,
-      username: user.username,
-      socketId: socket.id,
-      ready: false,
-    };
-
+  userId: user.userId,
+  username: user.username,
+  socketId: socket.id,
+  ready: false,
+  score: 0,
+};
     room.players.push(player);
 
     socket.join(cleanRoomCode);
@@ -839,64 +902,23 @@ if (
       return;
     }
 
-    currentRoom.status = "live";
-    currentRoom.countdownId = null;
+currentRoom.status = "live";
+currentRoom.countdownId = null;
 
-    // Create the first Math question
-const startedAt = Date.now();
+// Start Math Question 1
+currentRoom.mathQuestionIndex = 0;
 
-currentRoom.currentQuestion = {
-  id: `math-${startedAt}`,
+startMathQuestion(
+  cleanRoomCode
+);
 
-  prompt: "7 × 8 = ?",
-
-  choices: [
-    54,
-    56,
-    64,
-  ],
-
-  correctAnswer: 56,
-
-  startedAt,
-
-  deadlineAt: startedAt + 5000,
-
-  attempts: [],
-
-  resolved: false,
-};
-const questionId =
-  currentRoom.currentQuestion.id;
-
-setTimeout(() => {
-  const latestRoom =
-    rooms.get(cleanRoomCode);
-
-  if (
-    !latestRoom ||
-    !latestRoom.currentQuestion ||
-    latestRoom.currentQuestion.id !==
-      questionId
-  ) {
-    return;
-  }
-
-  resolveMathQuestion(
-    cleanRoomCode
-  );
-}, 5000);
 console.log(
   `Game started in room ${cleanRoomCode}`
 );
 
-console.log(
-  `Math question started: ${currentRoom.currentQuestion.prompt}`
-);
-
-    socket.nsp
-      .to(cleanRoomCode)
-      .emit("game_start");
+socket.nsp
+  .to(cleanRoomCode)
+  .emit("game_start");
   }, 3000);
 }
   }
