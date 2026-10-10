@@ -2,6 +2,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -9,7 +10,11 @@ import {
 } from "react-native";
 
 import { socket } from "../services/socket";
-
+type PlayerScore = {
+  userId: string;
+  username: string;
+  score: number;
+};
 type Question = {
   id: string;
   prompt: string;
@@ -17,6 +22,11 @@ type Question = {
   startedAt: number;
   deadlineAt: number;
   serverNow: number;
+
+  questionNumber: number;
+  totalQuestions: number;
+
+  scores: PlayerScore[];
 };
 
 type QuestionResponse =
@@ -51,6 +61,7 @@ type MathQuestionResult = {
   questionId: string;
   correctAnswer: number;
   results: MathPlayerResult[];
+  scores: PlayerScore[];
 };
 export default function MathQuestionScreen() {
   const { roomCode } =
@@ -84,6 +95,36 @@ const [submissionMessage, setSubmissionMessage] =
   useState<MathQuestionResult | null>(
     null
   );
+  const [scores, setScores] =
+  useState<PlayerScore[]>([]);
+  const [
+  mathPhaseComplete,
+  setMathPhaseComplete,
+] = useState(false);
+
+function loadQuestion(
+  newQuestion: Question
+) {
+  setQuestion(newQuestion);
+  setScores(newQuestion.scores);
+  setSelectedAnswer(null);
+  setSubmitting(false);
+  setSubmitted(false);
+  setSubmissionMessage("");
+  setError("");
+  setResult(null);
+
+  const remainingMs =
+    newQuestion.deadlineAt -
+    newQuestion.serverNow;
+
+  setTimeLeft(
+    Math.max(
+      0,
+      Math.ceil(remainingMs / 1000)
+    )
+  );
+}
   useEffect(() => {
     if (!roomCode) {
       setError("Room code missing.");
@@ -102,18 +143,9 @@ const [submissionMessage, setSubmissionMessage] =
           return;
         }
 
-        setQuestion(response.question);
-
-        const remainingMs =
-          response.question.deadlineAt -
-          response.question.serverNow;
-
-        setTimeLeft(
-          Math.max(
-            0,
-            Math.ceil(remainingMs / 1000)
-          )
-        );
+        loadQuestion(
+  response.question
+);
       }
     );
   }, [roomCode]);
@@ -154,6 +186,7 @@ const [submissionMessage, setSubmissionMessage] =
     );
 
     setResult(data);
+    setScores(data.scores);
     setTimeLeft(0);
   };
 
@@ -167,6 +200,67 @@ const [submissionMessage, setSubmissionMessage] =
       "math_question_result",
       handleQuestionResult
     );
+  };
+}, []);
+useEffect(() => {
+  const handleNewMathQuestion = (
+    newQuestion: Question
+  ) => {
+    console.log(
+      "New Math question:",
+      newQuestion.questionNumber
+    );
+
+    loadQuestion(newQuestion);
+  };
+
+  const handleMathPhaseComplete = () => {
+    console.log(
+      "Math phase complete"
+    );
+  
+    setMathPhaseComplete(true);
+    setTimeLeft(0);
+  };
+  const handleGeographyPhaseStart = () => {
+  console.log(
+    "Geography phase starting"
+  );
+
+  router.replace({
+    pathname: "/geography-question",
+    params: {
+      roomCode,
+    },
+  });
+};
+  socket.on(
+    "math_question_started",
+    handleNewMathQuestion
+  );
+
+  socket.on(
+    "math_phase_complete",
+    handleMathPhaseComplete
+  );
+socket.on(
+  "geography_phase_start",
+  handleGeographyPhaseStart
+);
+  return () => {
+    socket.off(
+      "math_question_started",
+      handleNewMathQuestion
+    );
+
+    socket.off(
+      "math_phase_complete",
+      handleMathPhaseComplete
+    );
+    socket.off(
+  "geography_phase_start",
+  handleGeographyPhaseStart
+);
   };
 }, []);
   function handleAnswer(
@@ -253,15 +347,37 @@ const [submissionMessage, setSubmissionMessage] =
   }
 
   return (
-    <View style={styles.container}>
+  <ScrollView
+    style={styles.container}
+    contentContainerStyle={styles.contentContainer}
+    showsVerticalScrollIndicator={false}
+  >
       <Text style={styles.phaseTitle}>
         Math Challenge
       </Text>
-
+      <Text style={styles.progress}>
+  Question {question.questionNumber} /{" "}
+  {question.totalQuestions}
+</Text>
       <Text style={styles.timer}>
         Time: {timeLeft}s
       </Text>
+      <View style={styles.scoreCard}>
+  {scores.map((player) => (
+    <View
+      key={player.userId}
+      style={styles.scoreRow}
+    >
+      <Text style={styles.scoreName}>
+        {player.username}
+      </Text>
 
+      <Text style={styles.scoreValue}>
+        {player.score} pts
+      </Text>
+    </View>
+  ))}
+</View>
       <View style={styles.questionCard}>
         <Text style={styles.question}>
           {question.prompt}
@@ -318,71 +434,64 @@ const [submissionMessage, setSubmissionMessage] =
 ) : null}
 {result && (
   <View style={styles.resultCard}>
-    <Text style={styles.resultTitle}>
-      Question Result
-    </Text>
-
     <Text style={styles.correctAnswer}>
-      Correct answer:{" "}
-      {result.correctAnswer}
+      Correct: {result.correctAnswer}
     </Text>
 
-    {result.results.map(
-      (playerResult) => (
-        <View
-          key={playerResult.userId}
-          style={styles.resultRow}
-        >
-          <View>
-            <Text
-              style={styles.resultUsername}
-            >
-              {playerResult.username}
-            </Text>
+    {result.results.map((playerResult) => (
+      <View
+        key={playerResult.userId}
+        style={styles.resultRow}
+      >
+        <Text style={styles.resultUsername}>
+          {playerResult.username}
+        </Text>
 
-            <Text style={styles.resultDetail}>
-              {playerResult.timedOut
-                ? "Timeout"
-                : playerResult.correct
-                ? "Correct"
-                : "Wrong"}
-            </Text>
+        <Text style={styles.resultStatus}>
+          {playerResult.timedOut
+            ? "Timeout"
+            : playerResult.correct
+            ? "Correct"
+            : "Wrong"}
 
-            {playerResult.responseTimeMs !==
-              null && (
-              <Text
-                style={styles.resultDetail}
-              >
-                {(
-                  playerResult.responseTimeMs /
-                  1000
-                ).toFixed(2)}
-                s
-              </Text>
-            )}
-          </View>
+          {playerResult.responseTimeMs !== null
+            ? ` · ${(playerResult.responseTimeMs / 1000).toFixed(2)}s`
+            : ""}
+        </Text>
 
-          <Text style={styles.points}>
-            {playerResult.points > 0
-              ? "+"
-              : ""}
-            {playerResult.points}
-          </Text>
-        </View>
-      )
-    )}
+        <Text style={styles.points}>
+          {playerResult.points > 0 ? "+" : ""}
+          {playerResult.points}
+        </Text>
+      </View>
+    ))}
   </View>
 )}
-    </View>
+{mathPhaseComplete && (
+  <View style={styles.phaseCompleteCard}>
+    <Text style={styles.phaseCompleteTitle}>
+      Math Phase Complete!
+    </Text>
+
+    <Text style={styles.phaseCompleteText}>
+      All 10 Math questions are finished.
+    </Text>
+  </View>
+)}
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: "center",
-    padding: 24,
     backgroundColor: "#ffffff",
+  },
+
+  contentContainer: {
+    paddingHorizontal: 18,
+    paddingTop: 20,
+    paddingBottom: 30,
   },
 
   center: {
@@ -398,7 +507,15 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     textAlign: "center",
     color: "#6D4AFF",
-    marginBottom: 14,
+    marginBottom: 4,
+  },
+
+  progress: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#6B7280",
+    textAlign: "center",
+    marginBottom: 8,
   },
 
   timer: {
@@ -406,7 +523,35 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     textAlign: "center",
     color: "#DC2626",
-    marginBottom: 25,
+    marginBottom: 10,
+  },
+
+  scoreCard: {
+    backgroundColor: "#F9FAFB",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 12,
+  },
+
+  scoreRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 5,
+  },
+
+  scoreName: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#374151",
+  },
+
+  scoreValue: {
+    fontSize: 17,
+    fontWeight: "bold",
+    color: "#6D4AFF",
   },
 
   questionCard: {
@@ -414,30 +559,31 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#E5E7EB",
     borderRadius: 16,
-    padding: 28,
-    marginBottom: 30,
+    padding: 16,
+    marginBottom: 14,
   },
 
   question: {
-    fontSize: 34,
+    fontSize: 30,
     fontWeight: "bold",
     textAlign: "center",
     color: "#111827",
   },
 
   answersContainer: {
-    gap: 14,
+    gap: 8,
   },
 
   answerButton: {
     backgroundColor: "#6D4AFF",
-    padding: 18,
+    paddingVertical: 13,
+    paddingHorizontal: 16,
     borderRadius: 12,
   },
 
   answerText: {
     color: "#ffffff",
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "bold",
     textAlign: "center",
   },
@@ -446,84 +592,103 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#6B7280",
     textAlign: "center",
-    marginTop: 24,
+    marginTop: 12,
   },
 
   error: {
     color: "#DC2626",
     textAlign: "center",
-    marginBottom: 20,
+    marginBottom: 10,
   },
 
   backText: {
     color: "#6D4AFF",
     fontSize: 16,
   },
+
   selectedAnswer: {
-  borderWidth: 3,
-  borderColor: "#111827",
-},
+    borderWidth: 3,
+    borderColor: "#111827",
+  },
 
-disabledAnswer: {
-  opacity: 0.6,
-},
+  disabledAnswer: {
+    opacity: 0.6,
+  },
 
-submissionMessage: {
-  fontSize: 16,
-  fontWeight: "600",
-  color: "#16A34A",
-  textAlign: "center",
-  marginTop: 24,
-},
-resultCard: {
-  marginTop: 24,
-  padding: 20,
-  borderWidth: 1,
-  borderColor: "#E5E7EB",
-  borderRadius: 16,
-  backgroundColor: "#F9FAFB",
-},
+  submissionMessage: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#16A34A",
+    textAlign: "center",
+    marginTop: 10,
+  },
 
-resultTitle: {
-  fontSize: 21,
-  fontWeight: "bold",
-  color: "#111827",
-  textAlign: "center",
-  marginBottom: 10,
-},
+  resultCard: {
+    marginTop: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 10,
+    backgroundColor: "#F9FAFB",
+  },
 
-correctAnswer: {
-  fontSize: 17,
-  fontWeight: "bold",
-  color: "#16A34A",
-  textAlign: "center",
-  marginBottom: 18,
-},
+  correctAnswer: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#16A34A",
+    textAlign: "center",
+    marginBottom: 4,
+  },
 
-resultRow: {
-  flexDirection: "row",
-  justifyContent: "space-between",
-  alignItems: "center",
-  paddingVertical: 12,
-  borderTopWidth: 1,
-  borderTopColor: "#E5E7EB",
-},
+  resultRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 4,
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
+  },
 
-resultUsername: {
-  fontSize: 17,
-  fontWeight: "bold",
-  color: "#111827",
-},
+  resultUsername: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#111827",
+  },
 
-resultDetail: {
-  fontSize: 14,
-  color: "#6B7280",
-  marginTop: 3,
-},
+  resultStatus: {
+    flex: 1.4,
+    fontSize: 12,
+    color: "#6B7280",
+    textAlign: "center",
+  },
 
-points: {
-  fontSize: 22,
-  fontWeight: "bold",
-  color: "#6D4AFF",
-},
+  points: {
+    width: 42,
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#6D4AFF",
+    textAlign: "right",
+  },
+
+  phaseCompleteCard: {
+    marginTop: 14,
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: "#F3EFFF",
+    alignItems: "center",
+  },
+
+  phaseCompleteTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#6D4AFF",
+    marginBottom: 5,
+  },
+
+  phaseCompleteText: {
+    fontSize: 14,
+    color: "#4B5563",
+    textAlign: "center",
+  },
 });

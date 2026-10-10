@@ -28,6 +28,30 @@ export type MathQuestionState = {
 
   resolved: boolean;
 };
+export type GeographyAttempt = {
+  userId: string;
+  username: string;
+  answer: string | null;
+  correct: boolean;
+  submittedAt: number | null;
+  responseTimeMs: number | null;
+};
+
+export type GeographyQuestionState = {
+  id: string;
+  capital: string;
+  prompt: string;
+  choices: string[];
+
+  correctAnswer: string;
+
+  startedAt: number;
+  deadlineAt: number;
+
+  attempts: GeographyAttempt[];
+
+  resolved: boolean;
+};
 export type GameRoom = {
   code: string;
   ownerId: string;
@@ -40,6 +64,12 @@ export type GameRoom = {
   currentQuestion: MathQuestionState | null;
 
   mathQuestionIndex: number;
+  currentGeographyQuestion:
+  GeographyQuestionState | null;
+
+geographyQuestionIndex: number;
+
+phase: "math" | "geography";
 };
 export const rooms = new Map<string, GameRoom>();
 

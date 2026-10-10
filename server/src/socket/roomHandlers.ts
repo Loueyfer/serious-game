@@ -2,6 +2,7 @@ import type { Socket } from "socket.io";
 
 import type { GameRoom } from "./roomStore";
 import { mathTasks } from "../tasks/mathTasks";
+import { geographyTasks } from "../tasks/geographyTasks";
 import {
   generateRoomCode,
   rooms,
@@ -35,6 +36,38 @@ type SubmitMathAnswerResponse =
       success: false;
       message: string;
     };
+type SubmitGeographyAnswerResponse =
+  | {
+      success: true;
+      responseTimeMs: number;
+    }
+  | {
+      success: false;
+      message: string;
+    };
+
+type GeographyPlayerResult = {
+  userId: string;
+  username: string;
+  answer: string | null;
+  correct: boolean;
+  responseTimeMs: number | null;
+  points: number;
+  timedOut: boolean;
+};
+
+type GeographyQuestionResult = {
+  questionId: string;
+  correctAnswer: string;
+
+  results: GeographyPlayerResult[];
+
+  scores: {
+    userId: string;
+    username: string;
+    score: number;
+  }[];
+};
 type MathPlayerResult = {
   userId: string;
   username: string;
@@ -49,7 +82,13 @@ type MathQuestionResult = {
   questionId: string;
   correctAnswer: number;
   results: MathPlayerResult[];
-};  
+
+  scores: {
+    userId: string;
+    username: string;
+    score: number;
+  }[];
+};
 export function registerRoomHandlers(
   socket: Socket
 ) {
@@ -208,12 +247,31 @@ export function registerRoomHandlers(
         timedOut: false,
       };
     });
+  results.forEach((playerResult) => {
+  const player = room.players.find(
+    (roomPlayer) =>
+      roomPlayer.userId ===
+      playerResult.userId
+  );
 
+  if (player) {
+    player.score +=
+      playerResult.points;
+  }
+});
+const scores = room.players.map(
+  (player) => ({
+    userId: player.userId,
+    username: player.username,
+    score: player.score,
+  })
+);
   const result: MathQuestionResult = {
     questionId: question.id,
     correctAnswer:
       question.correctAnswer,
     results,
+    scores,
   };
 
   console.log(
@@ -228,6 +286,79 @@ export function registerRoomHandlers(
       "math_question_result",
       result
     );
+    const resolvedQuestionId =
+  question.id;
+
+// Question 10 was the last Math question.
+const isLastQuestion =
+  room.mathQuestionIndex >=
+  mathTasks.length - 1;
+
+if (isLastQuestion) {
+  setTimeout(() => {
+    const latestRoom =
+      rooms.get(roomCode);
+
+    if (
+      !latestRoom ||
+      !latestRoom.currentQuestion ||
+      latestRoom.currentQuestion.id !==
+        resolvedQuestionId
+    ) {
+      return;
+    }
+
+    console.log(
+      `Math phase completed in room ${roomCode}`
+    );
+
+    // Switch the game to Geography
+    latestRoom.phase = "geography";
+
+    latestRoom.geographyQuestionIndex = 0;
+
+    latestRoom.currentGeographyQuestion =
+      null;
+
+    socket.nsp
+      .to(roomCode)
+      .emit("math_phase_complete");
+
+    console.log(
+      `Geography phase started in room ${roomCode}`
+    );
+
+    socket.nsp
+      .to(roomCode)
+      .emit("geography_phase_start");
+
+    startGeographyQuestion(
+      roomCode
+    );
+  }, 2500);
+
+  return;
+}
+
+// Otherwise start the next question
+setTimeout(() => {
+  const latestRoom =
+    rooms.get(roomCode);
+
+  if (
+    !latestRoom ||
+    !latestRoom.currentQuestion ||
+    latestRoom.currentQuestion.id !==
+      resolvedQuestionId ||
+    !latestRoom.currentQuestion.resolved
+  ) {
+    return;
+  }
+
+  latestRoom.mathQuestionIndex += 1;
+
+  startMathQuestion(roomCode);
+}, 2500);
 }
 function startMathQuestion(
   roomCode: string
@@ -271,7 +402,32 @@ function startMathQuestion(
       room.mathQuestionIndex + 1
     }/${mathTasks.length} started in room ${roomCode}: ${task.prompt}`
   );
+  
+  socket.nsp
+  .to(roomCode)
+  .emit("math_question_started", {
+    id: room.currentQuestion.id,
+    prompt: room.currentQuestion.prompt,
+    choices: room.currentQuestion.choices,
+    startedAt:
+      room.currentQuestion.startedAt,
+    deadlineAt:
+      room.currentQuestion.deadlineAt,
+    serverNow: Date.now(),
 
+    questionNumber:
+      room.mathQuestionIndex + 1,
+
+    totalQuestions:
+      mathTasks.length,
+      scores: room.players.map(
+  (player) => ({
+    userId: player.userId,
+    username: player.username,
+    score: player.score,
+  })
+),
+  });
   // Resolve automatically when the
   // 5-second deadline is reached.
   setTimeout(() => {
@@ -289,6 +445,294 @@ function startMathQuestion(
 
     resolveMathQuestion(roomCode);
   }, 5000);
+}
+function startGeographyQuestion(
+  roomCode: string
+) {
+  const room = rooms.get(roomCode);
+
+  if (!room) {
+    return;
+  }
+
+  const task =
+    geographyTasks[
+      room.geographyQuestionIndex
+    ];
+
+  if (!task) {
+    console.log(
+      `No Geography question found at index ${room.geographyQuestionIndex}`
+    );
+    return;
+  }
+
+  const startedAt = Date.now();
+
+  room.currentGeographyQuestion = {
+    id: task.id,
+
+    capital: task.capital,
+
+    prompt: `${task.capital} is the capital of which country?`,
+
+    choices: [...task.choices],
+
+    correctAnswer:
+      task.correctAnswer,
+
+    startedAt,
+
+    deadlineAt:
+      startedAt + 5000,
+
+    attempts: [],
+
+    resolved: false,
+  };
+
+  console.log(
+    `Geography question ${
+      room.geographyQuestionIndex + 1
+    }/${geographyTasks.length} started in room ${roomCode}: ${task.capital}`
+  );
+
+  socket.nsp
+    .to(roomCode)
+    .emit(
+      "geography_question_started",
+      {
+        id:
+          room.currentGeographyQuestion.id,
+
+        capital:
+          room.currentGeographyQuestion
+            .capital,
+
+        prompt:
+          room.currentGeographyQuestion
+            .prompt,
+
+        choices:
+          room.currentGeographyQuestion
+            .choices,
+
+        startedAt:
+          room.currentGeographyQuestion
+            .startedAt,
+
+        deadlineAt:
+          room.currentGeographyQuestion
+            .deadlineAt,
+
+        serverNow: Date.now(),
+
+        questionNumber:
+          room.geographyQuestionIndex + 1,
+
+        totalQuestions:
+          geographyTasks.length,
+
+        scores: room.players.map(
+          (player) => ({
+            userId: player.userId,
+            username: player.username,
+            score: player.score,
+          })
+        ),
+      }
+    );
+    const questionId =
+  room.currentGeographyQuestion.id;
+
+setTimeout(() => {
+  const latestRoom =
+    rooms.get(roomCode);
+
+  if (
+    !latestRoom ||
+    !latestRoom.currentGeographyQuestion ||
+    latestRoom.currentGeographyQuestion.id !==
+      questionId
+  ) {
+    return;
+  }
+
+  resolveGeographyQuestion(
+    roomCode
+  );
+}, 5000);
+}
+function resolveGeographyQuestion(
+  roomCode: string
+) {
+  const room = rooms.get(roomCode);
+
+  if (
+    !room ||
+    !room.currentGeographyQuestion ||
+    room.currentGeographyQuestion.resolved
+  ) {
+    return;
+  }
+
+  const question =
+    room.currentGeographyQuestion;
+
+  question.resolved = true;
+
+  const correctAttempts =
+    question.attempts
+      .filter((attempt) => attempt.correct)
+      .sort(
+        (a, b) =>
+          (a.responseTimeMs ?? Infinity) -
+          (b.responseTimeMs ?? Infinity)
+      );
+
+  const fastestCorrectUserId =
+    correctAttempts[0]?.userId ?? null;
+
+  const results: GeographyPlayerResult[] =
+    room.players.map((player) => {
+      const attempt =
+        question.attempts.find(
+          (attempt) =>
+            attempt.userId ===
+            player.userId
+        );
+
+      // No answer = timeout
+      if (!attempt) {
+        return {
+          userId: player.userId,
+          username: player.username,
+          answer: null,
+          correct: false,
+          responseTimeMs: null,
+          points: 0,
+          timedOut: true,
+        };
+      }
+
+      let points = -2;
+
+      if (attempt.correct) {
+        points =
+          attempt.userId ===
+          fastestCorrectUserId
+            ? 10
+            : 5;
+      }
+
+      return {
+        userId: player.userId,
+        username: player.username,
+        answer: attempt.answer,
+        correct: attempt.correct,
+        responseTimeMs:
+          attempt.responseTimeMs,
+        points,
+        timedOut: false,
+      };
+    });
+
+  // Add Geography points to running game score
+  results.forEach((playerResult) => {
+    const player = room.players.find(
+      (roomPlayer) =>
+        roomPlayer.userId ===
+        playerResult.userId
+    );
+
+    if (player) {
+      player.score +=
+        playerResult.points;
+    }
+  });
+
+  const scores = room.players.map(
+    (player) => ({
+      userId: player.userId,
+      username: player.username,
+      score: player.score,
+    })
+  );
+
+  const result: GeographyQuestionResult = {
+    questionId: question.id,
+    correctAnswer:
+      question.correctAnswer,
+    results,
+    scores,
+  };
+
+  console.log(
+    `Geography question resolved in room ${roomCode}`
+  );
+
+  socket.nsp
+    .to(roomCode)
+    .emit(
+      "geography_question_result",
+      result
+    );
+  const resolvedQuestionId =
+  question.id;
+
+const isLastQuestion =
+  room.geographyQuestionIndex >=
+  geographyTasks.length - 1;
+
+if (isLastQuestion) {
+  setTimeout(() => {
+    const latestRoom =
+      rooms.get(roomCode);
+
+    if (
+      !latestRoom ||
+      !latestRoom.currentGeographyQuestion ||
+      latestRoom.currentGeographyQuestion.id !==
+        resolvedQuestionId
+    ) {
+      return;
+    }
+
+    console.log(
+      `Geography phase completed in room ${roomCode}`
+    );
+
+    socket.nsp
+      .to(roomCode)
+      .emit(
+        "geography_phase_complete"
+      );
+  }, 2500);
+
+  return;
+}
+
+// Start next Geography question
+setTimeout(() => {
+  const latestRoom =
+    rooms.get(roomCode);
+
+  if (
+    !latestRoom ||
+    !latestRoom.currentGeographyQuestion ||
+    latestRoom.currentGeographyQuestion.id !==
+      resolvedQuestionId ||
+    !latestRoom.currentGeographyQuestion.resolved
+  ) {
+    return;
+  }
+
+  latestRoom.geographyQuestionIndex += 1;
+
+  startGeographyQuestion(
+    roomCode
+  );
+}, 2500);
 }
   socket.on(
     "create_room",
@@ -342,6 +786,10 @@ function startMathQuestion(
         countdownId: null,
         currentQuestion: null,
         mathQuestionIndex: 0,
+        currentGeographyQuestion: null,
+geographyQuestionIndex: 0,
+
+phase: "math",
       };
 
       rooms.set(roomCode, room);
@@ -559,8 +1007,275 @@ socket.on(
         // remaining time without controlling
         // the authoritative timer.
         serverNow: Date.now(),
+        questionNumber:
+  room.mathQuestionIndex + 1,
+
+totalQuestions:
+  mathTasks.length,
+  scores: room.players.map(
+      (player) => ({
+        userId: player.userId,
+        username: player.username,
+        score: player.score,
+      })
+    ),
       },
     });
+  }
+);
+socket.on(
+  "get_current_geography_question",
+  (
+    roomCode: string,
+    callback: (response: any) => void
+  ) => {
+    const user = socket.data.user as {
+      userId: string;
+      username: string;
+    };
+
+    const cleanRoomCode =
+      roomCode.trim().toUpperCase();
+
+    const room =
+      rooms.get(cleanRoomCode);
+
+    if (!room) {
+      callback({
+        success: false,
+        message: "Room not found",
+      });
+
+      return;
+    }
+
+    const playerInRoom =
+      room.players.some(
+        (player) =>
+          player.userId ===
+          user.userId
+      );
+
+    if (!playerInRoom) {
+      callback({
+        success: false,
+        message:
+          "You are not in this room",
+      });
+
+      return;
+    }
+
+    if (
+      !room.currentGeographyQuestion
+    ) {
+      callback({
+        success: false,
+        message:
+          "No active Geography question",
+      });
+
+      return;
+    }
+
+    const question =
+      room.currentGeographyQuestion;
+
+    callback({
+      success: true,
+
+      question: {
+        id: question.id,
+        capital: question.capital,
+        prompt: question.prompt,
+        choices: question.choices,
+        startedAt:
+          question.startedAt,
+        deadlineAt:
+          question.deadlineAt,
+
+        serverNow: Date.now(),
+
+        questionNumber:
+          room.geographyQuestionIndex + 1,
+
+        totalQuestions:
+          geographyTasks.length,
+
+        scores: room.players.map(
+          (player) => ({
+            userId: player.userId,
+            username: player.username,
+            score: player.score,
+          })
+        ),
+      },
+    });
+  }
+);
+socket.on(
+  "submit_geography_answer",
+  (
+    roomCode: string,
+    questionId: string,
+    answer: string,
+    callback: (
+      response: SubmitGeographyAnswerResponse
+    ) => void
+  ) => {
+    const user = socket.data.user as {
+      userId: string;
+      username: string;
+    };
+
+    const cleanRoomCode =
+      roomCode.trim().toUpperCase();
+
+    const room =
+      rooms.get(cleanRoomCode);
+
+    if (!room) {
+      callback({
+        success: false,
+        message: "Room not found",
+      });
+
+      return;
+    }
+
+    const playerInRoom =
+      room.players.some(
+        (player) =>
+          player.userId === user.userId
+      );
+
+    if (!playerInRoom) {
+      callback({
+        success: false,
+        message:
+          "You are not in this room",
+      });
+
+      return;
+    }
+
+    if (
+      room.phase !== "geography" ||
+      !room.currentGeographyQuestion
+    ) {
+      callback({
+        success: false,
+        message:
+          "No active Geography question",
+      });
+
+      return;
+    }
+
+    const question =
+      room.currentGeographyQuestion;
+
+    if (
+      question.id !== questionId
+    ) {
+      callback({
+        success: false,
+        message:
+          "Question is no longer active",
+      });
+
+      return;
+    }
+
+    if (question.resolved) {
+      callback({
+        success: false,
+        message:
+          "Question is already finished",
+      });
+
+      return;
+    }
+
+    const existingAttempt =
+      question.attempts.find(
+        (attempt) =>
+          attempt.userId === user.userId
+      );
+
+    if (existingAttempt) {
+      callback({
+        success: false,
+        message:
+          "You already answered this question",
+      });
+
+      return;
+    }
+
+    if (
+      typeof answer !== "string" ||
+      !question.choices.includes(answer)
+    ) {
+      callback({
+        success: false,
+        message: "Invalid answer",
+      });
+
+      return;
+    }
+
+    const submittedAt = Date.now();
+
+    if (
+      submittedAt >
+      question.deadlineAt
+    ) {
+      callback({
+        success: false,
+        message: "Time is up",
+      });
+
+      return;
+    }
+
+    const correct =
+      answer ===
+      question.correctAnswer;
+
+    const responseTimeMs =
+      submittedAt -
+      question.startedAt;
+
+    question.attempts.push({
+      userId: user.userId,
+      username: user.username,
+      answer,
+      correct,
+      submittedAt,
+      responseTimeMs,
+    });
+
+    console.log(
+      `${user.username} answered Geography ${answer} - ${
+        correct ? "correct" : "wrong"
+      } - ${responseTimeMs}ms`
+    );
+
+    callback({
+      success: true,
+      responseTimeMs,
+    });
+
+    const everyoneAnswered =
+      question.attempts.length ===
+      room.players.length;
+
+    if (everyoneAnswered) {
+      resolveGeographyQuestion(
+        cleanRoomCode
+      );
+    }
   }
 );
 socket.on(
