@@ -1,8 +1,8 @@
 import type { Socket } from "socket.io";
-
 import type { GameRoom } from "./roomStore";
 import { mathTasks } from "../tasks/mathTasks";
 import { geographyTasks } from "../tasks/geographyTasks";
+import { stroopTasks } from "../tasks/stroopTasks";
 import {
   generateRoomCode,
   rooms,
@@ -82,6 +82,39 @@ type MathQuestionResult = {
   questionId: string;
   correctAnswer: number;
   results: MathPlayerResult[];
+
+  scores: {
+    userId: string;
+    username: string;
+    score: number;
+  }[];
+};
+type SubmitStroopAnswerResponse =
+  | {
+      success: true;
+      responseTimeMs: number;
+    }
+  | {
+      success: false;
+      message: string;
+    };
+
+type StroopPlayerResult = {
+  userId: string;
+  username: string;
+  answer: boolean | null;
+  correct: boolean;
+  responseTimeMs: number | null;
+  points: number;
+  timedOut: boolean;
+};
+
+type StroopQuestionResult = {
+  questionId: string;
+
+  correctAnswer: boolean;
+
+  results: StroopPlayerResult[];
 
   scores: {
     userId: string;
@@ -563,6 +596,293 @@ setTimeout(() => {
   );
 }, 5000);
 }
+function startStroopQuestion(
+  roomCode: string
+) {
+  const room = rooms.get(roomCode);
+
+  if (!room) {
+    return;
+  }
+
+  const task =
+    stroopTasks[
+      room.stroopQuestionIndex
+    ];
+
+  if (!task) {
+    console.log(
+      `No Stroop question found at index ${room.stroopQuestionIndex}`
+    );
+
+    return;
+  }
+
+  const startedAt = Date.now();
+
+  room.currentStroopQuestion = {
+    id: task.id,
+
+    word: task.word,
+
+    inkColor: task.inkColor,
+
+    // This remains server-side.
+    isMatch: task.isMatch,
+
+    startedAt,
+
+    deadlineAt:
+      startedAt + 5000,
+
+    attempts: [],
+
+    resolved: false,
+  };
+
+  console.log(
+    `Stroop question ${
+      room.stroopQuestionIndex + 1
+    }/${stroopTasks.length} started in room ${roomCode}: ${task.word} shown in ${task.inkColor}`
+  );
+
+  socket.nsp
+    .to(roomCode)
+    .emit(
+      "stroop_question_started",
+      {
+        id:
+          room.currentStroopQuestion.id,
+
+        word:
+          room.currentStroopQuestion.word,
+
+        inkColor:
+          room.currentStroopQuestion
+            .inkColor,
+
+        startedAt:
+          room.currentStroopQuestion
+            .startedAt,
+
+        deadlineAt:
+          room.currentStroopQuestion
+            .deadlineAt,
+
+        serverNow: Date.now(),
+
+        questionNumber:
+          room.stroopQuestionIndex + 1,
+
+        totalQuestions:
+          stroopTasks.length,
+
+        scores: room.players.map(
+          (player) => ({
+            userId: player.userId,
+            username: player.username,
+            score: player.score,
+          })
+        ),
+      }
+    );
+    const questionId =
+  room.currentStroopQuestion.id;
+
+setTimeout(() => {
+  const latestRoom =
+    rooms.get(roomCode);
+
+  if (
+    !latestRoom ||
+    !latestRoom.currentStroopQuestion ||
+    latestRoom.currentStroopQuestion.id !==
+      questionId
+  ) {
+    return;
+  }
+
+  resolveStroopQuestion(
+    roomCode
+  );
+}, 5000);
+}
+function resolveStroopQuestion(
+  roomCode: string
+) {
+  const room = rooms.get(roomCode);
+
+  if (
+    !room ||
+    !room.currentStroopQuestion ||
+    room.currentStroopQuestion.resolved
+  ) {
+    return;
+  }
+
+  const question =
+    room.currentStroopQuestion;
+
+  question.resolved = true;
+
+  const correctAttempts =
+    question.attempts
+      .filter(
+        (attempt) => attempt.correct
+      )
+      .sort(
+        (a, b) =>
+          (a.responseTimeMs ?? Infinity) -
+          (b.responseTimeMs ?? Infinity)
+      );
+
+  const fastestCorrectUserId =
+    correctAttempts[0]?.userId ?? null;
+
+  const results: StroopPlayerResult[] =
+    room.players.map((player) => {
+      const attempt =
+        question.attempts.find(
+          (attempt) =>
+            attempt.userId ===
+            player.userId
+        );
+
+      // No submitted answer = timeout
+      if (!attempt) {
+        return {
+          userId: player.userId,
+          username: player.username,
+          answer: null,
+          correct: false,
+          responseTimeMs: null,
+          points: 0,
+          timedOut: true,
+        };
+      }
+
+      let points = -2;
+
+      if (attempt.correct) {
+        points =
+          attempt.userId ===
+          fastestCorrectUserId
+            ? 10
+            : 5;
+      }
+
+      return {
+        userId: player.userId,
+        username: player.username,
+        answer: attempt.answer,
+        correct: attempt.correct,
+        responseTimeMs:
+          attempt.responseTimeMs,
+        points,
+        timedOut: false,
+      };
+    });
+
+  // Add Stroop points to the running
+  // score from Math + Geography.
+  results.forEach((playerResult) => {
+    const player = room.players.find(
+      (roomPlayer) =>
+        roomPlayer.userId ===
+        playerResult.userId
+    );
+
+    if (player) {
+      player.score +=
+        playerResult.points;
+    }
+  });
+
+  const scores = room.players.map(
+    (player) => ({
+      userId: player.userId,
+      username: player.username,
+      score: player.score,
+    })
+  );
+
+  const result: StroopQuestionResult = {
+    questionId: question.id,
+
+    correctAnswer:
+      question.isMatch,
+
+    results,
+
+    scores,
+  };
+
+  console.log(
+    `Stroop question resolved in room ${roomCode}`
+  );
+
+  socket.nsp
+    .to(roomCode)
+    .emit(
+      "stroop_question_result",
+      result
+    );
+    const resolvedQuestionId =
+  question.id;
+
+const isLastQuestion =
+  room.stroopQuestionIndex >=
+  stroopTasks.length - 1;
+
+if (isLastQuestion) {
+  setTimeout(() => {
+    const latestRoom =
+      rooms.get(roomCode);
+
+    if (
+      !latestRoom ||
+      !latestRoom.currentStroopQuestion ||
+      latestRoom.currentStroopQuestion.id !==
+        resolvedQuestionId
+    ) {
+      return;
+    }
+
+    console.log(
+      `Stroop phase completed in room ${roomCode}`
+    );
+
+    socket.nsp
+      .to(roomCode)
+      .emit(
+        "stroop_phase_complete"
+      );
+  }, 2500);
+
+  return;
+}
+
+setTimeout(() => {
+  const latestRoom =
+    rooms.get(roomCode);
+
+  if (
+    !latestRoom ||
+    !latestRoom.currentStroopQuestion ||
+    latestRoom.currentStroopQuestion.id !==
+      resolvedQuestionId ||
+    !latestRoom.currentStroopQuestion.resolved
+  ) {
+    return;
+  }
+
+  latestRoom.stroopQuestionIndex += 1;
+
+  startStroopQuestion(
+    roomCode
+  );
+}, 2500);
+}
 function resolveGeographyQuestion(
   roomCode: string
 ) {
@@ -707,6 +1027,31 @@ if (isLastQuestion) {
       .emit(
         "geography_phase_complete"
       );
+
+    // Switch the match to Stroop.
+    latestRoom.phase = "stroop";
+
+    latestRoom.stroopQuestionIndex = 0;
+
+    latestRoom.currentStroopQuestion =
+      null;
+
+    console.log(
+      `Stroop phase starting in room ${roomCode}`
+    );
+
+    // Create Stroop Question 1 first.
+    startStroopQuestion(
+      roomCode
+    );
+
+    // Tell the mobile clients to open
+    // the Stroop screen.
+    socket.nsp
+      .to(roomCode)
+      .emit(
+        "stroop_phase_start"
+      );
   }, 2500);
 
   return;
@@ -787,8 +1132,9 @@ setTimeout(() => {
         currentQuestion: null,
         mathQuestionIndex: 0,
         currentGeographyQuestion: null,
-geographyQuestionIndex: 0,
-
+        geographyQuestionIndex: 0,
+        currentStroopQuestion: null,
+        stroopQuestionIndex: 0,
 phase: "math",
       };
 
@@ -1111,6 +1457,272 @@ socket.on(
         ),
       },
     });
+  }
+);
+socket.on(
+  "get_current_stroop_question",
+  (
+    roomCode: string,
+    callback: (response: any) => void
+  ) => {
+    const user = socket.data.user as {
+      userId: string;
+      username: string;
+    };
+
+    const cleanRoomCode =
+      roomCode.trim().toUpperCase();
+
+    const room =
+      rooms.get(cleanRoomCode);
+
+    if (!room) {
+      callback({
+        success: false,
+        message: "Room not found",
+      });
+
+      return;
+    }
+
+    const playerInRoom =
+      room.players.some(
+        (player) =>
+          player.userId ===
+          user.userId
+      );
+
+    if (!playerInRoom) {
+      callback({
+        success: false,
+        message:
+          "You are not in this room",
+      });
+
+      return;
+    }
+
+    if (
+      room.phase !== "stroop" ||
+      !room.currentStroopQuestion
+    ) {
+      callback({
+        success: false,
+        message:
+          "No active Stroop question",
+      });
+
+      return;
+    }
+
+    const question =
+      room.currentStroopQuestion;
+
+    callback({
+      success: true,
+
+      question: {
+        id: question.id,
+
+        word: question.word,
+
+        inkColor:
+          question.inkColor,
+
+        startedAt:
+          question.startedAt,
+
+        deadlineAt:
+          question.deadlineAt,
+
+        serverNow: Date.now(),
+
+        questionNumber:
+          room.stroopQuestionIndex + 1,
+
+        totalQuestions:
+          stroopTasks.length,
+
+        scores: room.players.map(
+          (player) => ({
+            userId: player.userId,
+            username: player.username,
+            score: player.score,
+          })
+        ),
+      },
+    });
+  }
+);
+socket.on(
+  "submit_stroop_answer",
+  (
+    roomCode: string,
+    questionId: string,
+    answer: boolean,
+    callback: (
+      response: SubmitStroopAnswerResponse
+    ) => void
+  ) => {
+    const user = socket.data.user as {
+      userId: string;
+      username: string;
+    };
+
+    const cleanRoomCode =
+      roomCode.trim().toUpperCase();
+
+    const room =
+      rooms.get(cleanRoomCode);
+
+    if (!room) {
+      callback({
+        success: false,
+        message: "Room not found",
+      });
+
+      return;
+    }
+
+    const playerInRoom =
+      room.players.some(
+        (player) =>
+          player.userId ===
+          user.userId
+      );
+
+    if (!playerInRoom) {
+      callback({
+        success: false,
+        message:
+          "You are not in this room",
+      });
+
+      return;
+    }
+
+    if (
+      room.phase !== "stroop" ||
+      !room.currentStroopQuestion
+    ) {
+      callback({
+        success: false,
+        message:
+          "No active Stroop question",
+      });
+
+      return;
+    }
+
+    const question =
+      room.currentStroopQuestion;
+
+    if (
+      question.id !== questionId
+    ) {
+      callback({
+        success: false,
+        message:
+          "Question is no longer active",
+      });
+
+      return;
+    }
+
+    if (question.resolved) {
+      callback({
+        success: false,
+        message:
+          "Question is already finished",
+      });
+
+      return;
+    }
+
+    const existingAttempt =
+      question.attempts.find(
+        (attempt) =>
+          attempt.userId ===
+          user.userId
+      );
+
+    if (existingAttempt) {
+      callback({
+        success: false,
+        message:
+          "You already answered this question",
+      });
+
+      return;
+    }
+
+    if (
+      typeof answer !== "boolean"
+    ) {
+      callback({
+        success: false,
+        message: "Invalid answer",
+      });
+
+      return;
+    }
+
+    const submittedAt = Date.now();
+
+    if (
+      submittedAt >
+      question.deadlineAt
+    ) {
+      callback({
+        success: false,
+        message: "Time is up",
+      });
+
+      return;
+    }
+
+    const correct =
+      answer === question.isMatch;
+
+    const responseTimeMs =
+      submittedAt -
+      question.startedAt;
+
+    question.attempts.push({
+      userId: user.userId,
+      username: user.username,
+      answer,
+      correct,
+      submittedAt,
+      responseTimeMs,
+    });
+
+    console.log(
+      `${user.username} answered Stroop ${
+        answer
+          ? "Correct"
+          : "Incorrect"
+      } - ${
+        correct
+          ? "correct"
+          : "wrong"
+      } - ${responseTimeMs}ms`
+    );
+
+    callback({
+      success: true,
+      responseTimeMs,
+    });
+
+    const everyoneAnswered =
+      question.attempts.length ===
+      room.players.length;
+
+    if (everyoneAnswered) {
+      resolveStroopQuestion(
+        cleanRoomCode
+      );
+    }
   }
 );
 socket.on(

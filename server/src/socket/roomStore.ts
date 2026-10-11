@@ -52,6 +52,40 @@ export type GeographyQuestionState = {
 
   resolved: boolean;
 };
+export type StroopAttempt = {
+  userId: string;
+  username: string;
+
+  answer: boolean | null;
+
+  correct: boolean;
+
+  submittedAt: number | null;
+
+  responseTimeMs: number | null;
+};
+
+export type StroopQuestionState = {
+  id: string;
+
+  word: string;
+
+  inkColor:
+    | "red"
+    | "blue"
+    | "green"
+    | "yellow";
+
+  isMatch: boolean;
+
+  startedAt: number;
+
+  deadlineAt: number;
+
+  attempts: StroopAttempt[];
+
+  resolved: boolean;
+};
 export type GameRoom = {
   code: string;
   ownerId: string;
@@ -61,15 +95,25 @@ export type GameRoom = {
   status: "lobby" | "countdown" | "live";
   countdownId: string | null;
 
-  currentQuestion: MathQuestionState | null;
+currentQuestion:
+  MathQuestionState | null;
 
-  mathQuestionIndex: number;
-  currentGeographyQuestion:
+mathQuestionIndex: number;
+
+currentGeographyQuestion:
   GeographyQuestionState | null;
 
 geographyQuestionIndex: number;
 
-phase: "math" | "geography";
+currentStroopQuestion:
+  StroopQuestionState | null;
+
+stroopQuestionIndex: number;
+
+phase:
+  | "math"
+  | "geography"
+  | "stroop";
 };
 export const rooms = new Map<string, GameRoom>();
 

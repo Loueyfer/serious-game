@@ -1,4 +1,7 @@
-import { useLocalSearchParams } from "expo-router";
+import {
+  useLocalSearchParams,
+  useRouter,
+} from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -74,7 +77,7 @@ export default function GeographyQuestionScreen() {
     useLocalSearchParams<{
       roomCode: string;
     }>();
-
+  const router = useRouter();
   const [question, setQuestion] =
     useState<GeographyQuestion | null>(null);
 
@@ -296,7 +299,18 @@ useEffect(() => {
       setGeographyPhaseComplete(true);
       setTimeLeft(0);
     };
+  const handleStroopPhaseStart = () => {
+  console.log(
+    "Stroop phase starting"
+  );
 
+  router.replace({
+    pathname: "/stroop-question",
+    params: {
+      roomCode,
+    },
+  });
+};
   socket.on(
     "geography_question_started",
     handleNewGeographyQuestion
@@ -306,7 +320,10 @@ useEffect(() => {
     "geography_phase_complete",
     handleGeographyPhaseComplete
   );
-
+  socket.on(
+  "stroop_phase_start",
+  handleStroopPhaseStart
+);
   return () => {
     socket.off(
       "geography_question_started",
@@ -317,6 +334,10 @@ useEffect(() => {
       "geography_phase_complete",
       handleGeographyPhaseComplete
     );
+    socket.off(
+  "stroop_phase_start",
+  handleStroopPhaseStart
+);
   };
 }, []);
   if (loading) {
