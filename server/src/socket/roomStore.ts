@@ -92,8 +92,11 @@ export type GameRoom = {
   players: RoomPlayer[];
   createdAt: string;
 
-  status: "lobby" | "countdown" | "live";
-  countdownId: string | null;
+status:
+  | "lobby"
+  | "countdown"
+  | "live"
+  | "finished";  countdownId: string | null;
 
 currentQuestion:
   MathQuestionState | null;
@@ -113,7 +116,8 @@ stroopQuestionIndex: number;
 phase:
   | "math"
   | "geography"
-  | "stroop";
+  | "stroop"
+  | "finished";
 };
 export const rooms = new Map<string, GameRoom>();
 

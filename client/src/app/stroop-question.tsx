@@ -1,4 +1,7 @@
-import { useLocalSearchParams } from "expo-router";
+import {
+  useLocalSearchParams,
+  useRouter,
+} from "expo-router";
 import { useEffect, useState } from "react";
 
 import {
@@ -84,6 +87,19 @@ type StroopQuestionResult = {
 
   scores: PlayerScore[];
 };
+type GameFinishedPayload = {
+  roomCode: string;
+
+  scores: {
+    userId: string;
+    username: string;
+    score: number;
+  }[];
+
+  winnerUserId: string | null;
+
+  isDraw: boolean;
+};
 const STROOP_COLORS: Record<
   StroopColor,
   string
@@ -99,7 +115,7 @@ export default function StroopQuestionScreen() {
     useLocalSearchParams<{
       roomCode: string;
     }>();
-
+  const router = useRouter();
   const [question, setQuestion] =
     useState<StroopQuestion | null>(null);
 
@@ -349,6 +365,48 @@ useEffect(() => {
     );
   };
 }, []);
+useEffect(() => {
+  const handleGameFinished = (
+    data: GameFinishedPayload
+  ) => {
+    console.log(
+      "Game finished:",
+      data
+    );
+
+    router.replace({
+      pathname: "/game-complete",
+
+      params: {
+        roomCode:
+          data.roomCode,
+
+        isDraw:
+          String(data.isDraw),
+
+        winnerUserId:
+          data.winnerUserId ?? "",
+
+        scores:
+          JSON.stringify(
+            data.scores
+          ),
+      },
+    });
+  };
+
+  socket.on(
+    "game_finished",
+    handleGameFinished
+  );
+
+  return () => {
+    socket.off(
+      "game_finished",
+      handleGameFinished
+    );
+  };
+}, [router]);
   if (loading) {
     return (
       <View style={styles.center}>

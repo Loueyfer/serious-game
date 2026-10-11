@@ -12,10 +12,14 @@ export default function InstructionsScreen() {
     <ScrollView
       contentContainerStyle={styles.container}
     >
-      <Text style={styles.title}>Game Instructions</Text>
+      <Text style={styles.title}>
+        Game Instructions
+      </Text>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Game Goal</Text>
+        <Text style={styles.sectionTitle}>
+          Game Goal
+        </Text>
 
         <Text style={styles.text}>
           This is a competitive 1v1 learning game.
@@ -26,6 +30,39 @@ export default function InstructionsScreen() {
         <Text style={styles.text}>
           Try to answer faster and more accurately
           than your opponent.
+        </Text>
+
+        <Text style={styles.text}>
+          The game contains 30 tasks across
+          three different phases.
+        </Text>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>
+          Game Flow
+        </Text>
+
+        <Text style={styles.text}>
+          • Create or join a private room
+        </Text>
+
+        <Text style={styles.text}>
+          • Both players press Ready
+        </Text>
+
+        <Text style={styles.text}>
+          • The game starts after the
+          synchronized 3-2-1 countdown
+        </Text>
+
+        <Text style={styles.text}>
+          • Math → Geography → Stroop
+        </Text>
+
+        <Text style={styles.text}>
+          • Final scores and winner are shown
+          after all 30 tasks
         </Text>
       </View>
 
@@ -61,29 +98,44 @@ export default function InstructionsScreen() {
         </Text>
 
         <Text style={styles.text}>
-          • Flags → Country
+          • Each question shows a capital city
         </Text>
 
         <Text style={styles.text}>
-          • Capitals → Country
+          • Choose the country that matches
+          the capital
         </Text>
 
         <Text style={styles.text}>
           • 3 answer choices
         </Text>
+
+        <Text style={styles.text}>
+          • Only one answer is correct
+        </Text>
       </View>
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>
-          3. Reaction Mini-Games
+          3. Stroop Challenge
         </Text>
 
         <Text style={styles.text}>
-          • 5 Stroop color-word tasks
+          • 10 color-word tasks
         </Text>
 
         <Text style={styles.text}>
-          • 5 animal-detection tasks
+          • A color word is displayed in a color
+        </Text>
+
+        <Text style={styles.text}>
+          • Tap Correct if the word matches
+          its displayed color
+        </Text>
+
+        <Text style={styles.text}>
+          • Tap Incorrect if the word and
+          displayed color do not match
         </Text>
       </View>
 
@@ -104,14 +156,16 @@ export default function InstructionsScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Scoring</Text>
+        <Text style={styles.sectionTitle}>
+          Scoring
+        </Text>
 
         <Text style={styles.text}>
           🏆 Fastest correct answer: +10 points
         </Text>
 
         <Text style={styles.text}>
-          ✅ Correct answer: +5 points
+          ✅ Other correct answer: +5 points
         </Text>
 
         <Text style={styles.text}>
@@ -134,7 +188,6 @@ export default function InstructionsScreen() {
     </ScrollView>
   );
 }
-
 const styles = StyleSheet.create({
   container: {
     padding: 24,

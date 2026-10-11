@@ -122,6 +122,19 @@ type StroopQuestionResult = {
     score: number;
   }[];
 };
+
+type GameFinishedPayload = {
+  roomCode: string;
+
+  scores: {
+    userId: string;
+    username: string;
+    score: number;
+  }[];
+
+  winnerUserId: string | null;
+  isDraw: boolean;
+};
 export function registerRoomHandlers(
   socket: Socket
 ) {
@@ -856,6 +869,64 @@ if (isLastQuestion) {
       .to(roomCode)
       .emit(
         "stroop_phase_complete"
+      );
+
+    // Mark the entire match as finished.
+    latestRoom.status = "finished";
+    latestRoom.phase = "finished";
+
+    const finalScores =
+      latestRoom.players.map(
+        (player) => ({
+          userId: player.userId,
+          username: player.username,
+          score: player.score,
+        })
+      );
+
+    const sortedScores = [
+      ...finalScores,
+    ].sort(
+      (a, b) =>
+        b.score - a.score
+    );
+
+    const firstPlayer =
+  sortedScores[0];
+
+const secondPlayer =
+  sortedScores[1];
+
+const isDraw =
+  firstPlayer !== undefined &&
+  secondPlayer !== undefined &&
+  firstPlayer.score ===
+    secondPlayer.score;
+
+const winnerUserId =
+  isDraw
+    ? null
+    : firstPlayer?.userId ?? null;
+
+    const payload: GameFinishedPayload = {
+      roomCode,
+
+      scores: finalScores,
+
+      winnerUserId,
+
+      isDraw,
+    };
+
+    console.log(
+      `Game finished in room ${roomCode}`
+    );
+
+    socket.nsp
+      .to(roomCode)
+      .emit(
+        "game_finished",
+        payload
       );
   }, 2500);
 
