@@ -1,8 +1,14 @@
 import type { Socket } from "socket.io";
 import type { GameRoom } from "./roomStore";
-import { mathTasks } from "../tasks/mathTasks";
-import { geographyTasks } from "../tasks/geographyTasks";
-import { stroopTasks } from "../tasks/stroopTasks";
+import {
+  generateMathTasks,
+} from "../tasks/mathTasks";
+import {
+  generateGeographyTasks,
+} from "../tasks/geographyTasks";
+import {
+  generateStroopTasks,
+} from "../tasks/stroopTasks";
 import {
   generateRoomCode,
   rooms,
@@ -338,7 +344,7 @@ const scores = room.players.map(
 // Question 10 was the last Math question.
 const isLastQuestion =
   room.mathQuestionIndex >=
-  mathTasks.length - 1;
+  room.mathTasks.length - 1;
 
 if (isLastQuestion) {
   setTimeout(() => {
@@ -362,10 +368,11 @@ if (isLastQuestion) {
     latestRoom.phase = "geography";
 
     latestRoom.geographyQuestionIndex = 0;
-
+    latestRoom.geographyTasks =
+  generateGeographyTasks();
     latestRoom.currentGeographyQuestion =
       null;
-
+    
     socket.nsp
       .to(roomCode)
       .emit("math_phase_complete");
@@ -416,7 +423,9 @@ function startMathQuestion(
   }
 
   const task =
-    mathTasks[room.mathQuestionIndex];
+  room.mathTasks[
+    room.mathQuestionIndex
+  ];
 
   if (!task) {
     console.log(
@@ -446,7 +455,7 @@ function startMathQuestion(
   console.log(
     `Math question ${
       room.mathQuestionIndex + 1
-    }/${mathTasks.length} started in room ${roomCode}: ${task.prompt}`
+    }/${room.mathTasks.length} started in room ${roomCode}: ${task.prompt}`
   );
   
   socket.nsp
@@ -465,7 +474,7 @@ function startMathQuestion(
       room.mathQuestionIndex + 1,
 
     totalQuestions:
-      mathTasks.length,
+      room.mathTasks.length,
       scores: room.players.map(
   (player) => ({
     userId: player.userId,
@@ -502,9 +511,9 @@ function startGeographyQuestion(
   }
 
   const task =
-    geographyTasks[
-      room.geographyQuestionIndex
-    ];
+  room.geographyTasks[
+    room.geographyQuestionIndex
+  ];
 
   if (!task) {
     console.log(
@@ -540,7 +549,7 @@ function startGeographyQuestion(
   console.log(
     `Geography question ${
       room.geographyQuestionIndex + 1
-    }/${geographyTasks.length} started in room ${roomCode}: ${task.capital}`
+    }/${room.geographyTasks.length} started in room ${roomCode}: ${task.capital}`
   );
 
   socket.nsp
@@ -577,7 +586,7 @@ function startGeographyQuestion(
           room.geographyQuestionIndex + 1,
 
         totalQuestions:
-          geographyTasks.length,
+          room.geographyTasks.length,
 
         scores: room.players.map(
           (player) => ({
@@ -619,10 +628,9 @@ function startStroopQuestion(
   }
 
   const task =
-    stroopTasks[
-      room.stroopQuestionIndex
-    ];
-
+  room.stroopTasks[
+    room.stroopQuestionIndex
+  ];
   if (!task) {
     console.log(
       `No Stroop question found at index ${room.stroopQuestionIndex}`
@@ -656,7 +664,7 @@ function startStroopQuestion(
   console.log(
     `Stroop question ${
       room.stroopQuestionIndex + 1
-    }/${stroopTasks.length} started in room ${roomCode}: ${task.word} shown in ${task.inkColor}`
+    }/${room.stroopTasks.length} started in room ${roomCode}: ${task.word} shown in ${task.inkColor}`
   );
 
   socket.nsp
@@ -688,7 +696,7 @@ function startStroopQuestion(
           room.stroopQuestionIndex + 1,
 
         totalQuestions:
-          stroopTasks.length,
+          room.stroopTasks.length,
 
         scores: room.players.map(
           (player) => ({
@@ -845,7 +853,7 @@ function resolveStroopQuestion(
 
 const isLastQuestion =
   room.stroopQuestionIndex >=
-  stroopTasks.length - 1;
+  room.stroopTasks.length - 1;
 
 if (isLastQuestion) {
   setTimeout(() => {
@@ -1073,7 +1081,7 @@ function resolveGeographyQuestion(
 
 const isLastQuestion =
   room.geographyQuestionIndex >=
-  geographyTasks.length - 1;
+  room.geographyTasks.length - 1;
 
 if (isLastQuestion) {
   setTimeout(() => {
@@ -1103,6 +1111,8 @@ if (isLastQuestion) {
     latestRoom.phase = "stroop";
 
     latestRoom.stroopQuestionIndex = 0;
+    latestRoom.stroopTasks =
+  generateStroopTasks();
 
     latestRoom.currentStroopQuestion =
       null;
@@ -1202,10 +1212,13 @@ setTimeout(() => {
         countdownId: null,
         currentQuestion: null,
         mathQuestionIndex: 0,
+        mathTasks: [],
         currentGeographyQuestion: null,
         geographyQuestionIndex: 0,
+        geographyTasks: [],
         currentStroopQuestion: null,
         stroopQuestionIndex: 0,
+        stroopTasks: [],
 phase: "math",
       };
 
@@ -1428,7 +1441,7 @@ socket.on(
   room.mathQuestionIndex + 1,
 
 totalQuestions:
-  mathTasks.length,
+    room.mathTasks.length,
   scores: room.players.map(
       (player) => ({
         userId: player.userId,
@@ -1517,7 +1530,7 @@ socket.on(
           room.geographyQuestionIndex + 1,
 
         totalQuestions:
-          geographyTasks.length,
+          room.geographyTasks.length,
 
         scores: room.players.map(
           (player) => ({
@@ -1612,7 +1625,7 @@ socket.on(
           room.stroopQuestionIndex + 1,
 
         totalQuestions:
-          stroopTasks.length,
+          room.stroopTasks.length,
 
         scores: room.players.map(
           (player) => ({
@@ -2302,9 +2315,10 @@ if (
 
 currentRoom.status = "live";
 currentRoom.countdownId = null;
-
-// Start Math Question 1
 currentRoom.mathQuestionIndex = 0;
+
+currentRoom.mathTasks =
+  generateMathTasks();
 
 startMathQuestion(
   cleanRoomCode

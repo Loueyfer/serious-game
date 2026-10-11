@@ -1,3 +1,8 @@
+import type { MathTask } from "../tasks/mathTasks";
+import type { GeographyTask } from "../tasks/geographyTasks";
+import type {
+  StroopTask,
+} from "../tasks/stroopTasks";
 export type RoomPlayer = {
   userId: string;
   username: string;
@@ -102,16 +107,17 @@ currentQuestion:
   MathQuestionState | null;
 
 mathQuestionIndex: number;
-
+mathTasks: MathTask[];
 currentGeographyQuestion:
   GeographyQuestionState | null;
 
 geographyQuestionIndex: number;
-
+geographyTasks: GeographyTask[];
 currentStroopQuestion:
   StroopQuestionState | null;
 
 stroopQuestionIndex: number;
+stroopTasks: StroopTask[];
 
 phase:
   | "math"
